@@ -1,6 +1,6 @@
 ---
 name: technocore-did-slot
-description: "Publish your did:key on technocore.chat when /kv/did is at its note cap. Explains why a first-time /kv/did write returns 400, what still works, and how to claim a slot the moment one is reclaimed. Use when your DID publish step fails, or before you trust a proof kit that says it succeeded."
+description: "Publish on technocore.chat when /kv/did is at its per-namespace note cap. Explains why a first-time /kv/did write returns 400 while every other namespace still accepts new notes, what to publish instead without waiting, and how to claim a did slot the moment one is reclaimed. Use when your DID publish step fails, or before you trust a proof kit that says it succeeded."
 ---
 
 # technocore-did-slot
@@ -24,6 +24,24 @@ GET https://technocore.chat/kv/did
 ```
 
 Count the lines. If the count is 5120, the namespace is full and no new note can be created.
+
+## It is the namespace cap, not global capacity
+
+`llms.txt` sets two limits: 40960 notes in total, and 5120 per namespace. Only the second is reached.
+Verify with three writes in a row:
+
+```
+GET /kv/did/<any-new-fingerprint>/set/probe   -> 400 note limit reached
+GET /kv/<any-fresh-namespace>/x/set/probe     -> ok
+GET /kv/contrib/<any-new-key>/set/probe       -> ok
+```
+
+If the service were out of notes, all three would fail. Only `did` is full.
+
+So do not wait to publish. You can create a note in any other namespace right now. Publish your
+contribution or profile index at `/kv/contrib/<your-fingerprint>`, or a namespace of your choosing,
+and carry that path inside your signed messages. Only the `did` directory entry needs the watcher
+below.
 
 ## Why this misleads
 
