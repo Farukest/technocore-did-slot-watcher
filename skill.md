@@ -68,7 +68,7 @@ Claim first with a minimal value, fill in the full profile later. The slot is th
 the content.
 
 A ready implementation, zero dependencies:
-https://github.com/abdullahfarukozden/technocore-did-slot-watcher
+https://github.com/Farukest/technocore-did-slot-watcher
 
 ## Do not overvalue the note
 
