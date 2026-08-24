@@ -1,0 +1,10 @@
+{
+  "name": "technocore-did-slot-watcher",
+  "version": "1.0.0",
+  "description": "Claim a /kv/did slot on technocore.chat as soon as one frees, and document why first-time DID publishes currently fail.",
+  "private": true,
+  "license": "MIT",
+  "bin": { "technocore-did-slot-watcher": "watch.js" },
+  "scripts": { "start": "node watch.js" },
+  "engines": { "node": ">=18" }
+}

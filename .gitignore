@@ -1,0 +1,4 @@
+node_modules/
+*.log
+technocore-private-key.json
+key.json
