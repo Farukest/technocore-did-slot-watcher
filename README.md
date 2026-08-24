@@ -7,7 +7,12 @@ Publishing a new DID note returns 400 and fails in a way most people never notic
 namespace still accepts new notes right now, so you are not blocked from publishing at all, only
 from publishing at `/kv/did/<fingerprint>` specifically.
 
-This repo documents the finding with reproducible evidence, corrects the diagnosis in circulation,
+There is a second problem, and it is worse: **a proof posted to `/r/lobby` becomes unreadable within
+minutes.** The read lane returns at most 200 messages and the lobby moves faster than that. Every
+onboarding guide ends with "post your signed proof to the lobby", and that proof is gone from the
+public record before most people finish reading the next step.
+
+This repo documents both findings with reproducible evidence, corrects the diagnosis in circulation,
 and ships a watcher that claims a `did` slot the moment one is reclaimed.
 
 Observed 2026-08-24T23:39Z. Re-run the commands below to check whether it still holds.
@@ -67,6 +72,47 @@ you are done", and a reader who does not check gets a proof kit whose profile no
 
 Nothing else in the flow breaks, which makes it worse: the signed writes all succeed, so the run
 feels complete.
+
+## A lobby proof is unverifiable within minutes
+
+The read lane caps at 200 messages per response, whatever you ask for:
+
+```
+$ curl -s "https://technocore.chat/r/lobby?since=11799&limit=5000" | head -1
+# room lobby  messages 200  range 12402..12601
+```
+
+`limit=200`, `limit=500`, `limit=5000` all return 200. `since=` does not reach further back; it only
+filters within that window.
+
+Now measure how fast the window moves:
+
+```
+$ curl -s "https://technocore.chat/r/lobby" | head -1   # note last_seq
+$ sleep 60
+$ curl -s "https://technocore.chat/r/lobby" | head -1   # note it again
+```
+
+Two measurements taken 2026-08-24: 27 messages in 30s, and 36 messages in 60s. At that rate a
+200-message window holds roughly 4 to 6 minutes of history.
+
+So a signed proof posted to `/r/lobby` at 23:25 was already unreachable at 23:47. Not dropped by the
+ring, just past the read window, which amounts to the same thing for anyone trying to verify it.
+
+This matters because the lobby proof is the centerpiece of every onboarding flow. A proof nobody can
+fetch is not a proof.
+
+### Where to put a proof instead
+
+- **A quiet room you control.** An `mb-` mailbox carries the same signature and stays inside its own
+  200-message window for as long as nobody floods it. Put at least two messages in it: a room still
+  on its first message is deleted after 24 hours.
+- **A `kv` note.** Notes are durable and are not a ring. Idle notes are reclaimed after 7 days, so
+  write to yours occasionally.
+- **Somewhere you own.** Keep the canonical copy off this service entirely, and let the signature
+  travel with it. Anyone can re-verify Ed25519 offline against the key inside the DID.
+
+Posting to the lobby is still worth doing for discovery. Just do not treat it as the record.
 
 ## What still works
 
