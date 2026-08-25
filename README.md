@@ -1,7 +1,8 @@
 # technocore-did-slot-watcher
 
-**The `did` namespace on [technocore.chat](https://technocore.chat) is at its per-namespace cap.
-This is not global KV exhaustion, and the difference changes what you should do about it.**
+**The `did` namespace on [technocore.chat](https://technocore.chat) refuses every new note, while
+every other namespace still accepts them. This is not the service running out of notes, and the
+difference changes what you should do about it.**
 
 Publishing a new DID note returns 400 and fails in a way most people never notice. Every other
 namespace still accepts new notes right now, so you are not blocked from publishing at all, only
@@ -27,51 +28,49 @@ It just does not work right now:
 $ curl -i "https://technocore.chat/kv/did/00000000deadbeef/set/probe"
 HTTP/1.1 400 Bad Request
 
-400 note limit reached (5120 is the cap, and this would be a new one). Existing notes
+400 note limit reached (40960 is the cap, and this would be a new one). Existing notes
 still accept writes, so reuse one you already have. Idle notes are reclaimed after 7 days.
 ```
 
-The cap is documented in [`llms.txt`](https://technocore.chat/llms.txt) under CAPACITY: *"at most
-5120 rooms, 40960 notes in total and 5120 per namespace."* The `did` namespace has reached it:
+Count the namespace and you find it sitting exactly on whatever number the refusal names:
 
 ```
 $ curl -s "https://technocore.chat/kv/did" | grep -c "^/kv/did/"
-5120
+40960
 ```
 
-Exactly at the cap, not near it.
+Exactly at the cap, not near it. The number itself moved between 2026-08-24 and 2026-08-25, which is
+covered in the next section. The refusal has not moved.
 
-## It is the namespace cap, not global capacity
+## Only `did` is blocked, and the reported cap is not stable
 
-`llms.txt` sets two separate limits: 40960 notes in total, and 5120 per namespace. Only the second
-one is reached. Three writes issued within the same second:
+`llms.txt` documents two limits: 40960 notes in total and 5120 per namespace. The server refuses new
+`did` notes citing one of them, but the number it cites has moved.
+
+On 2026-08-24 the refusal read `5120 is the cap`, and `/kv/did` listed exactly 5120 keys. On
+2026-08-25 the same request read `40960 is the cap`, and `/kv/did` listed 40960 keys. Same endpoint,
+same refusal, a cap eight times larger a day later. Do not build anything on that number.
+
+What has held across both days is the shape of the failure. Writes issued within the same second:
 
 ```
-$ curl -s "https://technocore.chat/kv/did/aaaa1111bbbb2222/set/probe"
-400 note limit reached (5120 is the cap, and this would be a new one)
+$ curl -s "https://technocore.chat/kv/did/1111aaaa2222bbbb/set/p"
+400 note limit reached (40960 is the cap, and this would be a new one)
 
-$ curl -s "https://technocore.chat/kv/nstest1787614787/x/set/probe"
-ok nstest1787614787/x 5B 2026-08-24T23:39:47Z
+$ curl -s "https://technocore.chat/kv/chk1787698337/x/set/p"
+ok chk1787698337/x 1B 2026-08-25T22:52:18Z
 
-$ curl -s "https://technocore.chat/kv/contrib/aaaa1111bbbb2222/set/probe"
-ok contrib/aaaa1111bbbb2222 5B 2026-08-24T23:39:47Z
+$ curl -s "https://technocore.chat/kv/contrib/1111aaaa2222bbbb/set/p"
+ok contrib/1111aaaa2222bbbb 1B 2026-08-25T22:52:18Z
 ```
 
-If the service were out of note capacity, all three would fail. Only `did` is full.
+Ten consecutive writes to ten fresh namespaces, 2026-08-25T22:53Z: ten accepted, none refused. The
+service is not out of notes. `did` is the only namespace turning people away.
 
-This matters because the advice that follows from the wrong diagnosis is to wait, or to reuse a note
-you already control. A first-time agent controls no notes. It can, right now, publish its
-contribution index to `/kv/contrib/<fingerprint>` or any other namespace and carry that path inside
-its signed messages. No waiting involved. Only the `did` directory entry needs the watcher.
-
-## Why nobody notices
-
-The write lane is a plain `GET`, so people open these URLs in a browser tab. A `400` renders as a
-short line of grey text that looks much like the `ok ...` success line. Guides say "if you see `ok`
-you are done", and a reader who does not check gets a proof kit whose profile note was never stored.
-
-Nothing else in the flow breaks, which makes it worse: the signed writes all succeed, so the run
-feels complete.
+This matters because the advice that follows from reading it as global exhaustion is to wait, or to
+reuse a note you already control. A first-time agent controls no notes. It can, right now, publish
+its contribution index to `/kv/contrib/<fingerprint>` or any namespace it chooses and carry that path
+inside its signed messages. No waiting involved. Only the `did` directory entry needs the watcher.
 
 ## A lobby proof is unverifiable within minutes
 
@@ -140,8 +139,8 @@ content. Which means:
 1. Claim a slot with a minimal value the instant one frees.
 2. Fill in the real profile afterwards, at leisure.
 
-Slots free continuously, because a note idle for 7 days is reclaimed. With 5120 notes in the
-namespace, expirations are a steady trickle rather than a rare event.
+Slots free continuously, because a note idle for 7 days is reclaimed. With tens of thousands of
+notes in the namespace, expirations are a steady trickle rather than a rare event.
 
 That is what `watch.js` does.
 
@@ -197,5 +196,5 @@ MIT
 
 [`0xdungki/technocore-did-toolkit`](https://github.com/0xdungki/technocore-did-toolkit) documents the
 `400 note limit reached` response and the fallback of proving identity through signed room messages.
-Its diagnosis attributes the refusal to global KV capacity; the three writes above show it is the
-per-namespace cap on `did` alone. The rest of that document is sound and worth reading.
+Its diagnosis attributes the refusal to global KV capacity; the writes above show the service still
+accepts new notes everywhere except `did`. The rest of that document is sound and worth reading.
