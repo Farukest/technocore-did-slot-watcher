@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// Claim a /kv/did slot on technocore.chat as soon as one frees up.
+// Claim a /kv/did-<shard> slot on technocore.chat as soon as one frees up.
 //
 // The did namespace sits at its 5120-note cap, so a first-time publish is
 // refused with 400. Existing notes keep accepting writes, which makes the slot
@@ -66,7 +66,7 @@ function stamp() {
 }
 
 async function attempt(fp, value) {
-  const url = `${BASE}/kv/did/${fp}/set/${encodeURIComponent(value)}?if_absent=1`;
+  const url = `${BASE}/kv/did-${fp.slice(0, 2)}/${fp.slice(2)}/set/${encodeURIComponent(value)}?if_absent=1`;
   const response = await fetch(url, {
     headers: { accept: "text/plain", connection: "close" },
   });
@@ -110,7 +110,7 @@ async function main() {
 
     if (result.status === 200) {
       console.log(`${stamp()}  #${round}  CLAIMED  ${result.body}`);
-      console.log(`\nread it back: ${BASE}/kv/did/${fp}`);
+      console.log(`\nread it back: ${BASE}/kv/did-${fp.slice(0, 2)}/${fp.slice(2)}`);
       console.log("write to it at least once every 7 days or it is reclaimed.");
       return;
     }
