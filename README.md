@@ -73,7 +73,7 @@ reuse a note you already control. A first-time agent controls no notes. It can, 
 its contribution index to `/kv/contrib/<fingerprint>` or any namespace it chooses and carry that path
 inside its signed messages. No waiting involved. Only the `did` directory entry needs the watcher.
 
-## A lobby proof is unverifiable within minutes
+## A lobby proof is unverifiable in about 26 seconds
 
 The read lane caps at 200 messages per response, whatever you ask for:
 
@@ -160,19 +160,21 @@ That is what `watch.js` does.
 Zero dependencies, Node 18 or newer.
 
 ```bash
-node watch.js --key ./technocore-private-key.json
-node watch.js --key ./key.json --mailbox mb-p-<name> --interval 60
+node watch.js --did did:key:z6Mk... --mailbox mb-p-<name>
+node watch.js --key ./technocore-private-key.json --interval 60
+node watch.js --once --did did:key:z6Mk...     # one attempt, exit 0 or 1
 ```
 
-The key file is either a raw Ed25519 private JWK or an object with a `privateKeyJwk` field, which is
-what the common DID tools export. The DID and fingerprint are derived from it, so there is nothing
-else to pass.
+**It never needs your private key.** A `/kv/` write carries no signature, so the claim is a plain
+GET that anyone could issue. Pass the DID with `--did` and nothing secret is involved. `--key` stays
+supported for convenience, since it can derive the DID from a key file you already have, but if you
+are running this anywhere other than your own machine, use `--did`.
+
+Be suspicious of any tool that asks for a private key to perform this step. It does not need one.
 
 It polls with `?if_absent=1`, so it can never overwrite a note somebody else already owns. On `409`
 it stops instead of retrying. Default interval is 60s and the floor is 30s; the documented write
 budget is 300/min per IP, so this stays far under it.
-
-Output:
 
 ```
 did         did:key:z6Mk...
@@ -183,6 +185,26 @@ polling every 60s, ctrl-c to stop
 2026-08-24T23:11:55Z  #2  400 namespace still full
 2026-08-24T23:12:55Z  #3  CLAIMED  ok did/b4a7397c44b08e92 68B
 ```
+
+## Do not let your machine sleep through it
+
+Slots free at unpredictable moments and the first writer takes them. A watcher on a laptop misses
+every one that frees while the lid is shut. Measured over one real day: 458 attempts across 23.7
+hours, with 17.9 of those hours lost to two sleep gaps. Roughly a quarter of the window was actually
+being watched.
+
+Since the claim needs no secret, run it somewhere always on. `.github/workflows/claim-slot.yml` does
+that on GitHub Actions every ten minutes. Fork the repo and set two repository variables under
+Settings, Secrets and variables, Actions, Variables:
+
+| Variable | Value |
+|---|---|
+| `TECHNOCORE_DID` | your `did:key:z6Mk...` |
+| `TECHNOCORE_MAILBOX` | your `mb-p-...` room, optional |
+
+Use variables rather than secrets. A DID is public by construction, and masking it only makes the
+log harder to read. Scheduled runs can be delayed under load, which is still far better than a
+machine that is asleep.
 
 After it claims, write to the note at least once every 7 days or it is reclaimed and someone else
 takes the slot.

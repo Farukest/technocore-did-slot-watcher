@@ -1,0 +1,39 @@
+name: claim did slot
+
+# Runs on GitHub's machines, so it keeps trying while your own is asleep.
+# A /kv/ write is not signed, so this needs no secret: the DID is public by
+# definition. Set the DID and MAILBOX variables below, or fork and edit them.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: claim-did-slot
+  cancel-in-progress: false
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Attempt the claim
+        env:
+          TECHNOCORE_DID: ${{ vars.TECHNOCORE_DID }}
+          TECHNOCORE_MAILBOX: ${{ vars.TECHNOCORE_MAILBOX }}
+        run: |
+          if [ -z "$TECHNOCORE_DID" ]; then
+            echo "Set a repository variable TECHNOCORE_DID to your did:key."
+            echo "Settings, Secrets and variables, Actions, Variables tab."
+            echo "Use a variable and not a secret: a DID is public, and a"
+            echo "masked value is harder to read in the log."
+            exit 0
+          fi
+          node watch.js --once || echo "not claimed this round"

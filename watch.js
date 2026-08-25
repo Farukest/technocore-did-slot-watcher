@@ -21,10 +21,16 @@ const ED25519_PREFIX = Buffer.from([0xed, 0x01]);
 
 function parseArgs(argv) {
   const out = {};
-  for (let i = 0; i < argv.length; i += 2) {
+  for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     if (!flag || !flag.startsWith("--")) continue;
-    out[flag.slice(2)] = argv[i + 1];
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("--")) {
+      out[flag.slice(2)] = true;
+      continue;
+    }
+    out[flag.slice(2)] = next;
+    i += 1;
   }
   return out;
 }
@@ -61,27 +67,36 @@ function stamp() {
 
 async function attempt(fp, value) {
   const url = `${BASE}/kv/did/${fp}/set/${encodeURIComponent(value)}?if_absent=1`;
-  const response = await fetch(url, { headers: { accept: "text/plain" } });
+  const response = await fetch(url, {
+    headers: { accept: "text/plain", connection: "close" },
+  });
   const body = (await response.text()).trim();
   return { status: response.status, body };
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const keyPath = args.key || "./technocore-private-key.json";
+  const once = args.once === true;
   const interval = Math.max(30, Number(args.interval) || 60);
 
-  const raw = JSON.parse(fs.readFileSync(path.resolve(keyPath), "utf8"));
-  const jwk = raw.privateKeyJwk || raw;
-  const did = didFromJwk(jwk);
+  let did = typeof args.did === "string" ? args.did : process.env.TECHNOCORE_DID || "";
+  if (!did) {
+    const keyPath = typeof args.key === "string" ? args.key : "./technocore-private-key.json";
+    const raw = JSON.parse(fs.readFileSync(path.resolve(keyPath), "utf8"));
+    did = didFromJwk(raw.privateKeyJwk || raw);
+  }
+  if (!/^did:key:z[1-9A-HJ-NP-Za-km-z]+$/.test(did)) {
+    throw new Error("pass a did:key with --did, or a key file with --key");
+  }
   const fp = fingerprint(did);
 
-  const value = args.mailbox ? `${did} mailbox:${args.mailbox}` : did;
+  const mailbox = typeof args.mailbox === "string" ? args.mailbox : process.env.TECHNOCORE_MAILBOX || "";
+  const value = mailbox ? `${did} mailbox:${mailbox}` : did;
 
   console.log(`did         ${did}`);
   console.log(`fingerprint ${fp}`);
   console.log(`value       ${value}`);
-  console.log(`polling every ${interval}s, ctrl-c to stop\n`);
+  console.log(once ? "single attempt\n" : `polling every ${interval}s, ctrl-c to stop\n`);
 
   for (let round = 1; ; round += 1) {
     let result;
@@ -109,6 +124,10 @@ async function main() {
       ? "namespace still full"
       : result.body.slice(0, 120);
     console.log(`${stamp()}  #${round}  ${result.status} ${reason}`);
+    if (once) {
+      process.exitCode = 1;
+      return;
+    }
     await new Promise((r) => setTimeout(r, interval * 1000));
   }
 }
